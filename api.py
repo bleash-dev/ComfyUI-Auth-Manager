@@ -35,14 +35,20 @@ def setup_routes():
                     "message": "Username and password are required"
                 }, status=400)
             
-            success, message = await auth_manager.authenticate(
+            success, message, user_data = await auth_manager.authenticate(
                 username, password)
             
-            return web.json_response({
+            response_data = {
                 "success": success,
                 "message": message,
                 "timestamp": datetime.now().isoformat()
-            })
+            }
+            
+            # Include user data for frontend localStorage storage
+            if success and user_data:
+                response_data["user_data"] = user_data
+            
+            return web.json_response(response_data)
             
         except Exception as e:
             return web.json_response({
@@ -52,24 +58,31 @@ def setup_routes():
 
     @PromptServer.instance.routes.get("/auth/status")
     async def get_auth_status(request):
-        """Get current authentication status"""
+        """Get current authentication status - now frontend managed"""
         try:
-            status_data = auth_manager.get_auth_status()
-            return web.json_response(status_data)
+            # Return indication that auth is frontend-managed
+            return web.json_response({
+                "authenticated": False,
+                "frontend_managed": True,
+                "message": "Authentication is managed by frontend localStorage",
+                "timestamp": datetime.now().isoformat()
+            })
         except Exception as e:
             return web.json_response({
                 "authenticated": False,
+                "frontend_managed": True,
                 "error": str(e)
             }, status=500)
 
     @PromptServer.instance.routes.post("/auth/logout")
     async def logout(request):
-        """Logout the current user"""
+        """Logout the current user - handled by frontend localStorage"""
         try:
             auth_manager.logout()
             return web.json_response({
                 "success": True,
-                "message": "Logged out successfully",
+                "message": "Logout handled by frontend localStorage",
+                "frontend_managed": True,
                 "timestamp": datetime.now().isoformat()
             })
         except Exception as e:
@@ -80,7 +93,17 @@ def setup_routes():
 
     @PromptServer.instance.routes.get("/auth/check")
     async def check_auth(request):
-        """Quick check if user is authenticated"""
-        return web.json_response({
-            "authenticated": auth_manager.is_authenticated()
-        })
+        """Check authentication - now frontend managed"""
+        try:
+            return web.json_response({
+                "authenticated": False,
+                "frontend_managed": True,
+                "message": "Check localStorage for authentication state",
+                "timestamp": datetime.now().isoformat()
+            })
+        except Exception as e:
+            return web.json_response({
+                "authenticated": False,
+                "frontend_managed": True,
+                "error": str(e)
+            }, status=500)

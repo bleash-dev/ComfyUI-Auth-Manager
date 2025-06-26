@@ -11,33 +11,26 @@ from pathlib import Path
 class AuthManager:
     """
     Manages authentication for ComfyUI pods
+    Note: Authentication state is now managed by frontend localStorage
     """
     
     def __init__(self):
-        # Get config root from environment or default to /root
-        self.config_root = os.getenv("CONFIG_ROOT", "/root")
-        self.auth_dir = Path(self.config_root) / ".comfyui_auth"
-        self.auth_file = self.auth_dir / "auth_status"
-        
         # Auth endpoint from environment
         self.auth_endpoint = os.getenv("AUTH_ENDPOINT", "https://your-api.com")
         self.pod_id = os.getenv("RUNPOD_POD_ID", "unknown")
         
-        print(f"Auth Manager: Using config root: {self.config_root}")
         print(f"Auth Manager: Using auth endpoint: {self.auth_endpoint}")
         print(f"Auth Manager: Pod ID: {self.pod_id}")
-        
-        # Ensure directories exist
-        try:
-            self.auth_dir.mkdir(parents=True, exist_ok=True)
-            print(f"Auth Manager: Created auth directory: {self.auth_dir}")
-        except Exception as e:
-            print(f"Auth Manager: Error creating auth directory: {e}")
+        print("Auth Manager: Authentication state managed by "
+              "frontend localStorage")
         
         print("Auth Manager initialized")
 
     def _save_auth_status(self, authenticated=False, username=None):
-        """Save authentication status to file"""
+        """
+        Authentication status - now handled by frontend localStorage
+        This method is kept for backward compatibility
+        """
         auth_data = {
             "authenticated": authenticated,
             "username": username,
@@ -45,34 +38,34 @@ class AuthManager:
             "pod_id": self.pod_id
         }
         
-        try:
-            with open(self.auth_file, 'w') as f:
-                json.dump(auth_data, f)
-            print(f"Auth Manager: Saved auth status - "
-                  f"authenticated: {authenticated}")
-        except Exception as e:
-            print(f"Auth Manager: Error saving auth status: {e}")
+        print(f"Auth Manager: Authentication status - "
+              f"authenticated: {authenticated}, "
+              f"managed by frontend localStorage")
+        return auth_data
 
     def _load_auth_status(self):
-        """Load authentication status from file"""
-        try:
-            if self.auth_file.exists():
-                with open(self.auth_file, 'r') as f:
-                    data = json.load(f)
-                    return data
-            return {"authenticated": False, "username": None}
-        except Exception as e:
-            print(f"Auth Manager: Error loading auth status: {e}")
-            return {"authenticated": False, "username": None}
+        """Authentication status is now managed by frontend localStorage"""
+        # Return default state since auth is now frontend-managed
+        return {
+            "authenticated": False,
+            "username": None,
+            "message": "Authentication managed by frontend localStorage"
+        }
 
     def is_authenticated(self):
-        """Check if user is currently authenticated"""
-        auth_data = self._load_auth_status()
-        return auth_data.get("authenticated", False)
+        """Authentication check is now handled by frontend localStorage"""
+        # Always return False since backend no longer manages auth state
+        return False
 
     def get_auth_status(self):
-        """Get current authentication status data"""
-        return self._load_auth_status()
+        """Get current authentication status - frontend managed"""
+        return {
+            "authenticated": False,
+            "username": None,
+            "backend_managed": False,
+            "frontend_managed": True,
+            "message": "Authentication state managed by frontend localStorage"
+        }
 
     def _get_current_pod_id(self):
         """Get current RunPod ID using multiple fallback methods"""
@@ -123,7 +116,8 @@ class AuthManager:
     async def authenticate(self, username, password):
         """
         Authenticate user with the backend API with HMAC signature
-        Returns: (success: bool, message: str)
+        Returns: (success: bool, message: str, user_data: dict)
+        Note: Authentication state is now managed by frontend localStorage
         """
         try:
             auth_url = f"{self.auth_endpoint}"
@@ -135,10 +129,7 @@ class AuthManager:
                 "password": password,
                 "runPodId": actual_pod_id,
                 "username": username,
-
             }
-
-            print("payload:", json.dumps(payload, indent=2))
             
             headers = {
                 "Content-Type": "application/json"
@@ -163,54 +154,51 @@ class AuthManager:
             )
             
             if response.status_code == 200:
-                # Authentication successful
-                self._save_auth_status(authenticated=True, username=username)
+                # Authentication successful - return data for frontend storage
+                user_data = {
+                    "username": username,
+                    "pod_id": actual_pod_id,
+                    "authenticated_at": datetime.now().isoformat(),
+                    "session_id": f"{actual_pod_id}_{int(time.time())}"
+                }
+                
                 print(f"Auth Manager: Authentication successful for "
                       f"user: {username}")
-                return True, "Authentication successful"
+                return True, "Authentication successful", user_data
             elif response.status_code == 401:
                 # Invalid credentials
                 print(f"Auth Manager: Authentication failed - {response.text}")
-                self._save_auth_status(authenticated=False)
                 print(f"Auth Manager: Authentication failed - "
                       f"invalid credentials for user: {username}")
-                return False, "Invalid username or password"
+                return False, "Invalid username or password", None
             elif response.status_code == 403:
                 # Access denied
-                self._save_auth_status(authenticated=False)
                 print(f"Auth Manager: Authentication failed - "
                       f"access denied for user: {username}")
-                return False, "Access denied for this pod"
+                return False, "Access denied for this pod", None
             else:
                 # Other error
-                self._save_auth_status(authenticated=False)
                 print(f"Auth Manager: Authentication failed - "
                       f"server error: {response.status_code}")
-                return False, f"Server error: {response.status_code}"
+                return False, f"Server error: {response.status_code}", None
                 
         except requests.exceptions.Timeout:
             print("Auth Manager: Authentication request timed out")
-            return False, "Authentication request timed out"
+            return False, "Authentication request timed out", None
         except requests.exceptions.ConnectionError:
             print("Auth Manager: Could not connect to authentication server")
-            return False, "Could not connect to authentication server"
+            return False, "Could not connect to authentication server", None
         except Exception as e:
             print(f"Auth Manager: Authentication error: {e}")
-            return False, f"Authentication error: {str(e)}"
+            return False, f"Authentication error: {str(e)}", None
 
     def logout(self):
-        """Logout the current user"""
-        self._save_auth_status(authenticated=False)
-        print("Auth Manager: User logged out")
+        """Logout handled by frontend localStorage"""
+        print("Auth Manager: Logout - handled by frontend localStorage")
 
     def clear_auth(self):
-        """Clear all authentication data"""
-        try:
-            if self.auth_file.exists():
-                self.auth_file.unlink()
-                print("Auth Manager: Authentication data cleared")
-        except Exception as e:
-            print(f"Auth Manager: Error clearing auth data: {e}")
+        """Clear authentication data - handled by frontend localStorage"""
+        print("Auth Manager: Clear auth - handled by frontend localStorage")
 
 
 # Global auth manager instance

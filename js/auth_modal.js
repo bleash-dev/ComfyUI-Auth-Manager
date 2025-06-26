@@ -5,40 +5,145 @@ class AuthModal {
         this.modal = null;
         this.isAuthenticated = false;
         this.checkingAuth = false;
+        this.authStorageKey = 'comfyui_auth_data';
         this.init();
     }
 
     init() {
-        // Check authentication status on startup
-        this.checkAuthStatus();
+        // Check authentication status from localStorage first
+        this.checkLocalAuthStatus();
         
         // Create modal but keep it hidden initially
         this.createModal();
+        
+        // Show modal if not authenticated
+        if (!this.isAuthenticated) {
+            this.showModal();
+        } else {
+            console.log('✅ User already authenticated, hiding modal');
+        }
+    }
+
+    checkLocalAuthStatus() {
+        // Use the global storage manager if available
+        if (window.comfyAuthStorage) {
+            this.isAuthenticated = window.comfyAuthStorage.isAuthenticated();
+            if (this.isAuthenticated) {
+                const user = window.comfyAuthStorage.getCurrentUser();
+                console.log('✅ User authenticated from localStorage:', user?.username);
+            } else {
+                console.log('❌ No valid authentication found in localStorage');
+            }
+            return this.isAuthenticated;
+        }
+        
+        // Fallback to original method
+        try {
+            const authData = localStorage.getItem(this.authStorageKey);
+            if (authData) {
+                const parsed = JSON.parse(authData);
+                
+                // Check if authentication data is valid and not expired
+                if (this.isAuthDataValid(parsed)) {
+                    this.isAuthenticated = true;
+                    console.log('✅ User authenticated from localStorage:', parsed.username);
+                    return true;
+                } else {
+                    // Remove invalid/expired auth data
+                    this.clearAuthData();
+                }
+            }
+            
+            this.isAuthenticated = false;
+            console.log('❌ No valid authentication found in localStorage');
+            return false;
+            
+        } catch (error) {
+            console.error('Error checking localStorage auth:', error);
+            this.clearAuthData();
+            this.isAuthenticated = false;
+            return false;
+        }
+    }
+
+    isAuthDataValid(authData) {
+        // Check if authentication data is valid and not expired
+        if (!authData || !authData.username || !authData.authenticated_at) {
+            return false;
+        }
+        
+        // Check if authentication is less than 24 hours old
+        const authTime = new Date(authData.authenticated_at);
+        const now = new Date();
+        const hoursDiff = (now - authTime) / (1000 * 60 * 60);
+        
+        if (hoursDiff > 24) {
+            console.log('🕐 Authentication expired (> 24 hours)');
+            return false;
+        }
+        
+        return true;
+    }
+
+    saveAuthData(userData) {
+        // Use global storage manager if available
+        if (window.comfyAuthStorage) {
+            return window.comfyAuthStorage.saveAuth(userData);
+        }
+        
+        // Fallback to original method
+        try {
+            const authData = {
+                ...userData,
+                saved_at: new Date().toISOString()
+            };
+            
+            localStorage.setItem(this.authStorageKey, JSON.stringify(authData));
+            console.log('💾 Authentication data saved to localStorage');
+            return true;
+            
+        } catch (error) {
+            console.error('Error saving auth data to localStorage:', error);
+            return false;
+        }
+    }
+
+    clearAuthData() {
+        // Use global storage manager if available
+        if (window.comfyAuthStorage) {
+            window.comfyAuthStorage.clearAuth();
+            return;
+        }
+        
+        // Fallback to original method
+        try {
+            localStorage.removeItem(this.authStorageKey);
+            console.log('🧹 Authentication data cleared from localStorage');
+        } catch (error) {
+            console.error('Error clearing auth data from localStorage:', error);
+        }
+    }
+
+    getAuthData() {
+        // Use global storage manager if available
+        if (window.comfyAuthStorage) {
+            return window.comfyAuthStorage.getAuth();
+        }
+        
+        // Fallback to original method
+        try {
+            const authData = localStorage.getItem(this.authStorageKey);
+            return authData ? JSON.parse(authData) : null;
+        } catch (error) {
+            console.error('Error getting auth data from localStorage:', error);
+            return null;
+        }
     }
 
     async checkAuthStatus() {
-        if (this.checkingAuth) return;
-        
-        this.checkingAuth = true;
-        try {
-            const response = await fetch('/auth/check');
-            const data = await response.json();
-            
-            if (data.authenticated) {
-                this.isAuthenticated = true;
-                this.hideModal();
-                console.log('User is already authenticated');
-            } else {
-                this.isAuthenticated = false;
-                this.showModal();
-                console.log('User needs to authenticate');
-            }
-        } catch (error) {
-            console.error('Error checking auth status:', error);
-            this.showModal(); // Show modal on error to be safe
-        } finally {
-            this.checkingAuth = false;
-        }
+        // Legacy method - authentication is now localStorage based
+        // Always check localStorage first
+        return this.checkLocalAuthStatus();
     }
 
     createModal() {
@@ -588,6 +693,21 @@ class AuthModal {
 
             if (data.success) {
                 this.isAuthenticated = true;
+                
+                // Save authentication data to localStorage
+                if (data.user_data) {
+                    this.saveAuthData(data.user_data);
+                    console.log('💾 Authentication data saved to localStorage');
+                } else {
+                    // Fallback: create basic auth data
+                    const authData = {
+                        username: username,
+                        authenticated_at: new Date().toISOString(),
+                        session_id: `session_${Date.now()}`
+                    };
+                    this.saveAuthData(authData);
+                }
+                
                 this.showMessage('✅ Authentication successful! Welcome to ComfyUI.', 'success');
                 
                 // Clean up security measures immediately
@@ -721,17 +841,26 @@ class AuthModal {
 
     async logout() {
         try {
+            // Clear localStorage first
+            this.clearAuthData();
+            this.isAuthenticated = false;
+            
+            // Optional: notify backend (though it's no longer managing state)
             const response = await fetch('/auth/logout', {
                 method: 'POST'
             });
             
-            if (response.ok) {
-                this.isAuthenticated = false;
-                this.showModal();
-                console.log('User logged out');
-            }
+            console.log('🚪 User logged out - localStorage cleared');
+            
+            // Show modal again
+            this.showModal();
+            
         } catch (error) {
             console.error('Logout error:', error);
+            // Even if backend call fails, we've cleared localStorage
+            this.clearAuthData();
+            this.isAuthenticated = false;
+            this.showModal();
         }
     }
 }
