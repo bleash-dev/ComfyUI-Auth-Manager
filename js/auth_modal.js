@@ -216,7 +216,7 @@ class AuthModal {
             <form id="auth-form" style="text-align: left;">
                 <div style="margin-bottom: 20px;">
                     <label for="username" style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px;">
-                        Email / Username
+                        Username
                     </label>
                     <input 
                         type="text" 
@@ -233,7 +233,7 @@ class AuthModal {
                             color: #333;
                             box-sizing: border-box;
                         "
-                        placeholder="Enter your email or username"
+                        placeholder="Enter your username"
                     />
                 </div>
                 
