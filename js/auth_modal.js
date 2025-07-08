@@ -10,11 +10,12 @@ class AuthModal {
     }
 
     init() {
+        
         // Check authentication status from localStorage first
         this.checkLocalAuthStatus();
         
         // Check premium configuration on load
-        this.checkPremiumOnLoad();
+        window.comfyAuthUtils.checkPremium();
         
         // Create modal but keep it hidden initially
         this.createModal();
