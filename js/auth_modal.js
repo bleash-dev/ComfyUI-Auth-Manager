@@ -13,6 +13,9 @@ class AuthModal {
         // Check authentication status from localStorage first
         this.checkLocalAuthStatus();
         
+        // Check premium configuration on load
+        this.checkPremiumOnLoad();
+        
         // Create modal but keep it hidden initially
         this.createModal();
         
@@ -708,6 +711,19 @@ class AuthModal {
                     this.saveAuthData(authData);
                 }
                 
+                // Handle premium configuration
+                if (data.premium_config) {
+                    if (window.comfyAuthStorage) {
+                        window.comfyAuthStorage.savePremiumConfig(data.premium_config);
+                        
+                        if (data.premium_config.isPremium) {
+                            console.log('💎 Premium configuration saved to localStorage');
+                        } else {
+                            console.log('ℹ️ Non-premium user - premium config cleared');
+                        }
+                    }
+                }
+                
                 this.showMessage('✅ Authentication successful! Welcome to ComfyUI.', 'success');
                 
                 // Clean up security measures immediately
@@ -875,6 +891,14 @@ app.registerExtension({
         // Wait a bit for ComfyUI to fully load
         setTimeout(() => {
             authModal = new AuthModal();
+            
+            // Also check premium status periodically for non-premium users
+            // to clean up any unauthorized premium data
+            setInterval(async () => {
+                if (window.comfyAuthUtils && window.comfyAuthStorage.isAuthenticated()) {
+                    await window.comfyAuthUtils.checkPremium();
+                }
+            }, 5 * 60 * 1000); // Check every 5 minutes
         }, 1000);
     }
 });
